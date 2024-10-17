@@ -39,15 +39,16 @@ contract MultiSigWallet{
         _;
     }
 
-    function submitTransaction(address _to, uint256 _amount, bytes memory _data) public view returns(uint256) onlyOwner{
+    function submitTransaction(address _to, uint256 _amount, bytes memory _data) public onlyOwner returns(uint256){
         require(_amount > address(this).balance, 'Insufficient Balance');
         Transaction memory txn = Transaction(_to, _amount, _data, false, 0);
         transactions.push(txn);
         return transactions.length;
     }
 
-    function confirmTransaction(uint256 _txnIndex) public onlyOwner{
-        if(!isConfirmed[_txnIndex][msg.sender], 'Already confirmed from your side');
+    function confirmTransaction(uint256 _txnIndex) public onlyOwner isExists(_txnIndex){
+        require(!transactions[_txnIndex].executed, 'already executed');
+        require(!isConfirmed[_txnIndex][msg.sender], 'Already confirmed from your side');
         isConfirmed[_txnIndex][msg.sender] = true;
         Transaction storage txn = transactions[_txnIndex];
         txn.noOfConfirmations++;
@@ -57,7 +58,7 @@ contract MultiSigWallet{
     }
 
     function revokeConfirmations(uint256 _txnIndex) public onlyOwner(){
-        if(isConfirmed[_txnIndex][msg.sender], 'you have not confirmed from your side');
+        require(isConfirmed[_txnIndex][msg.sender], 'you have not confirmed from your side');
         isConfirmed[_txnIndex][msg.sender] = false;
         Transaction storage txn = transactions[_txnIndex];
         txn.noOfConfirmations--;
@@ -65,11 +66,22 @@ contract MultiSigWallet{
 
     function executeTxn(uint256 _txnIndex) private{
         Transaction storage txn = transactions[_txnIndex];
-        (bool sent, bytes data) = payable(txn.to).call{value: txn.amount}(txn.data);
+        (bool sent,) = payable(txn.to).call{value: txn.amount}(txn.data);
         require(sent, 'transaction has been failed');
         txn.executed = true;
     }
 
-    receive() external payable{
+    function getOwners() public view returns(address[] memory) {
+        return owners;
     }
+
+    function getTransaction(uint _txnIndex) public view returns(Transaction memory){
+        Transaction memory transaction = transactions[_txnIndex];
+        return transaction;
+    }
+
+    receive() external payable{
+
+    }
+
 }
